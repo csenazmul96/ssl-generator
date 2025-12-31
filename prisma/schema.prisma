@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  name          String?
+  email         String    
+  password      String?
+  image         String?
+  provider      String    @default("credentials")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Domain {
+  id            String     @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String     @db.ObjectId
+  name          String     
+  status        String     @default("pending") // pending, active, expired
+  expiresAt     DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+model AcmeOrder {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  domainId      String    @db.ObjectId
+  
+  orderUrl      String
+  accountKey    String    // Stored as Text/JSON
+  privateKey    String    // Stored as Text/JSON
+  
+  // Challenge details
+  challengeType String    // dns-01, http-01
+  challengeUrl  String
+  challengeKey  String    
+  challengeVal  String    
+  
+  updatedAt     DateTime  @updatedAt
+}

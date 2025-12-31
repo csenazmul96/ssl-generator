@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
         const { domain } = body;
 
-        const state = getOrder(domain);
+        const state = await getOrder(domain);
         if (!state) {
             return NextResponse.json({ error: 'Order not found or expired' }, { status: 404 });
         }
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
             const content = await zip.generateAsync({ type: 'nodebuffer' });
 
             // Cleanup
-            deleteOrder(domain);
+            await deleteOrder(domain);
 
             // ... return response
             const headers = new Headers();

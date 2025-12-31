@@ -1,54 +1,85 @@
-import fs from 'fs';
-import path from 'path';
-
-const DATA_FILE = path.join(process.cwd(), 'acme-orders.json');
+import dbConnect from './db';
+import Domain from '@/models/Domain';
+import AcmeOrder from '@/models/AcmeOrder';
 
 export interface OrderState {
     domain: string;
     orderUrl: string;
-    accountKey: string; // JSON stringified
-    privateKey: string; // DOMAIN private key, JSON stringified or PEM
+    accountKey: string;
+    privateKey: string;
     challenge: {
         type: 'dns-01' | 'http-01';
         url: string;
-        // For DNS: key=_acme-challenge.domain, value=digest
-        // For HTTP: key=token (filename), value=keyAuthorization (file content)
         key: string;
         value: string;
     };
 }
 
-export function saveOrder(domain: string, state: OrderState) {
-    let data: Record<string, OrderState> = {};
-    if (fs.existsSync(DATA_FILE)) {
-        try {
-            data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
-        } catch (e) {
-            console.warn('Failed to parse order file, starting fresh', e);
+export async function saveOrder(domainName: string, state: OrderState, userId?: string) {
+    await dbConnect();
+
+    // 1. Find or Create Domain
+    let domainVal = await Domain.findOne({ name: domainName });
+
+    if (!domainVal && userId) {
+        domainVal = await Domain.create({
+            name: domainName,
+            userId: userId,
+            status: 'pending'
+        });
+    }
+
+    if (!domainVal) {
+        throw new Error(`Domain ${domainName} not found and no user provided to create it.`);
+    }
+
+    // 2. Clear previous orders
+    await AcmeOrder.deleteMany({ domainId: domainVal._id });
+
+    // 3. Create new order
+    await AcmeOrder.create({
+        domainId: domainVal._id,
+        orderUrl: state.orderUrl,
+        accountKey: state.accountKey,
+        privateKey: state.privateKey,
+        challengeType: state.challenge.type,
+        challengeUrl: state.challenge.url,
+        challengeKey: state.challenge.key,
+        challengeVal: state.challenge.value
+    });
+
+    // Update domain status
+    await Domain.findByIdAndUpdate(domainVal._id, { status: 'pending' });
+}
+
+export async function getOrder(domainName: string): Promise<OrderState | null> {
+    await dbConnect();
+    const domain = await Domain.findOne({ name: domainName });
+
+    if (!domain) return null;
+
+    const order = await AcmeOrder.findOne({ domainId: domain._id }).sort({ updatedAt: -1 });
+
+    if (!order) return null;
+
+    return {
+        domain: domain.name,
+        orderUrl: order.orderUrl,
+        accountKey: order.accountKey,
+        privateKey: order.privateKey,
+        challenge: {
+            type: order.challengeType as any,
+            url: order.challengeUrl,
+            key: order.challengeKey,
+            value: order.challengeVal
         }
-    }
-    data[domain] = state;
-    try {
-        fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-    } catch (err) {
-        console.error('Failed to write order file:', err);
-        throw err;
-    }
+    };
 }
 
-export function getOrder(domain: string): OrderState | null {
-    if (!fs.existsSync(DATA_FILE)) return null;
-    try {
-        const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
-        return data[domain] || null;
-    } catch (e) {
-        return null;
+export async function deleteOrder(domainName: string) {
+    await dbConnect();
+    const domain = await Domain.findOne({ name: domainName });
+    if (domain) {
+        await AcmeOrder.deleteMany({ domainId: domain._id });
     }
-}
-
-export function deleteOrder(domain: string) {
-    if (!fs.existsSync(DATA_FILE)) return;
-    const data = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
-    delete data[domain];
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }

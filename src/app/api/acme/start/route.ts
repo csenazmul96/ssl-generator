@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import acme from 'acme-client';
 import { saveOrder } from '@/lib/orderStore';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/authOptions';
 
 // Staging environment for testing
 // const DIRECTORY_URL = acme.directory.letsencrypt.staging;
@@ -8,6 +10,13 @@ const DIRECTORY_URL = acme.directory.letsencrypt.production;
 
 export async function POST(req: NextRequest) {
     try {
+        const session = await getServerSession(authOptions);
+        if (!session || !session.user) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+        // @ts-ignore
+        const userId = session.user.id as string;
+
         const body = await req.json();
         const { domain, email, challengeType = 'dns-01' } = body; // supported: dns-01, http-01
         const contactEmail = email || `admin@${domain}`;
@@ -68,7 +77,7 @@ export async function POST(req: NextRequest) {
             value = keyAuthorization;
         }
 
-        saveOrder(domain, {
+        await saveOrder(domain, {
             domain,
             orderUrl: order.url,
             accountKey: JSON.stringify(privateKey),
@@ -79,7 +88,7 @@ export async function POST(req: NextRequest) {
                 key, // DNS Host or File Name
                 value, // DNS Value or File Content
             },
-        });
+        }, userId);
 
         return NextResponse.json({
             status: 'pending_challenge',
