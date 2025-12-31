@@ -9,11 +9,15 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "acme-client": "^5.4.0",
+    "jszip": "^3.10.1",
     "next": "16.1.1",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "selfsigned": "^5.4.0"
   },
   "devDependencies": {
+    "@types/jszip": "^3.4.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
