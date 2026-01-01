@@ -41,8 +41,8 @@ export function AppSidebar() {
         <Sidebar className="z-50">
             <SidebarHeader className=" px-4 py-3">
                 <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold">
-                        A
+                    <div className="flex h-8 w-10 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold">
+                        SSL
                     </div>
                     <span className="font-semibold">Admin</span>
                 </div>

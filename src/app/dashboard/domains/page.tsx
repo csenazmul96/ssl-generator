@@ -346,10 +346,10 @@ export default function Domains() {
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={() => handleVerify(domain.name, 'dns-01')}>
-                                    Generate DNS Token
+                                    DNS Verify
                                 </DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => handleVerify(domain.name, 'http-01')}>
-                                    Generate HTTP Token
+                                    HTTP Verify
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem className="text-destructive">
