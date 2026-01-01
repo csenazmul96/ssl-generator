@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, AlertCircle } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function RegisterPage() {
     const router = useRouter();
@@ -143,24 +144,20 @@ export default function RegisterPage() {
             <div className="relative hidden lg:block">
                 <div className="absolute inset-0">
                     <img
-                        src="/login-cover.jpg"
+                        src="/1.png"
                         alt="SSL security background"
                         className="h-full w-full object-cover"
                     />
                 </div>
                 <div className="absolute inset-0 bg-background/30" />
                 <div className="relative z-10 flex h-full flex-col items-center justify-center p-10">
-                    <img
-                        src="/ssl-tech-icon.png"
+                    <Image
+                        src="/3.png"
                         alt="SSL Certificate"
-                        className="h-64 w-64 object-contain"
+                        width={800}
+                        height={800}
+                        className="h-[30rem] w-[30rem] object-contain"
                     />
-                    <div className="mt-8 text-center">
-                        <h2 className="text-2xl font-bold text-foreground">Join the Secure Web</h2>
-                        <p className="mt-2 text-muted-foreground max-w-md">
-                            Start managing your SSL certificates with enterprise-grade security tools today.
-                        </p>
-                    </div>
                 </div>
             </div>
         </div>
