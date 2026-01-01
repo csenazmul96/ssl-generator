@@ -12,6 +12,7 @@ import {
     getPaginationRowModel,
     getSortedRowModel,
     useReactTable,
+    FilterFn,
 } from "@tanstack/react-table";
 import {
     Table,
@@ -30,6 +31,13 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -40,7 +48,8 @@ import {
     Plus,
     Search,
     Loader2,
-    Copy
+    Copy,
+    Filter
 } from "lucide-react";
 import {
     Dialog,
@@ -61,6 +70,24 @@ type Domain = {
     ssl: boolean;
     createdAt: string;
     expiresAt: string;
+};
+
+// Custom Filter Functions
+const dateRangeFilter: FilterFn<Domain> = (row, columnId, value) => {
+    if (value === 'all') return true;
+
+    const dateStr = row.getValue(columnId) as string;
+    if (!dateStr) return false;
+
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); // Difference in days
+
+    if (value === 'last-week') return diffDays <= 7;
+    if (value === 'last-month') return diffDays <= 30;
+
+    return true;
 };
 
 // Define columns
@@ -99,6 +126,7 @@ const columns: ColumnDef<Domain>[] = [
                 </Badge>
             );
         },
+        filterFn: "equalsString"
     },
     {
         accessorKey: "ssl",
@@ -132,7 +160,8 @@ const columns: ColumnDef<Domain>[] = [
             try {
                 return dateStr ? new Date(dateStr).toLocaleDateString() : "-";
             } catch (e) { return dateStr; }
-        }
+        },
+        filterFn: dateRangeFilter
     },
     {
         accessorKey: "expiresAt",
@@ -187,6 +216,10 @@ export default function Domains() {
     const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
     const [rowSelection, setRowSelection] = useState({});
 
+    // Filter States
+    const [statusFilter, setStatusFilter] = useState<string>("all");
+    const [dateFilter, setDateFilter] = useState<string>("all");
+
     // Add Domain State
     const [newDomain, setNewDomain] = useState('');
     const [adding, setAdding] = useState(false);
@@ -218,6 +251,18 @@ export default function Domains() {
     useEffect(() => {
         fetchDomains();
     }, []);
+
+    // Effect to apply custom filters to the table state
+    useEffect(() => {
+        const filters = [];
+        if (statusFilter && statusFilter !== 'all') {
+            filters.push({ id: 'status', value: statusFilter });
+        }
+        if (dateFilter && dateFilter !== 'all') {
+            filters.push({ id: 'createdAt', value: dateFilter });
+        }
+        setColumnFilters(filters);
+    }, [statusFilter, dateFilter]);
 
     const handleAdd = async () => {
         if (!newDomain) return;
@@ -466,6 +511,30 @@ export default function Domains() {
                         className="pl-10"
                     />
                 </div>
+
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger className="w-[180px]">
+                        <Filter className="mr-2 h-4 w-4" />
+                        <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Statuses</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="expired">Expired</SelectItem>
+                    </SelectContent>
+                </Select>
+
+                <Select value={dateFilter} onValueChange={setDateFilter}>
+                    <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Date Range" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Time</SelectItem>
+                        <SelectItem value="last-week">Last Week</SelectItem>
+                        <SelectItem value="last-month">Last Month</SelectItem>
+                    </SelectContent>
+                </Select>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button variant="outline">
