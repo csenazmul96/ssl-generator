@@ -39,7 +39,7 @@ export function AppSidebar() {
 
     return (
         <Sidebar className="z-50">
-            <SidebarHeader className="border-b px-4 py-3">
+            <SidebarHeader className=" px-4 py-3">
                 <div className="flex items-center gap-2">
                     <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold">
                         A
@@ -69,7 +69,7 @@ export function AppSidebar() {
                     </SidebarGroupContent>
                 </SidebarGroup>
             </SidebarContent>
-            <SidebarFooter className="border-t p-4">
+            <SidebarFooter className=" p-4">
                 <p className="text-xs text-muted-foreground">Version 1.0.0</p>
             </SidebarFooter>
         </Sidebar>

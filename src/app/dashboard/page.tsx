@@ -19,33 +19,35 @@ import {
     ArrowDownRight,
     ShieldCheck,
     Clock,
-    AlertTriangle
+    AlertTriangle,
+    Loader2
 } from "lucide-react";
 import Link from 'next/link';
 
-// Mock recent activity until we have a real backend for it
-const recentActivity = [
-    { id: 1, action: "Domain added", domain: "example.com", time: "2 hours ago" },
-    { id: 2, action: "SSL renewed", domain: "test.org", time: "4 hours ago" },
-    { id: 3, action: "DNS updated", domain: "demo.io", time: "6 hours ago" },
-    { id: 4, action: "Domain verified", domain: "app.dev", time: "8 hours ago" },
-];
+interface ActivityItem {
+    id: string;
+    action: string;
+    domain: string;
+    time: string;
+}
 
 export default function DashboardPage() {
     const { data: session } = useSession();
+    const [isLoading, setIsLoading] = useState(true);
+    const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
     const [stats, setStats] = useState([
         {
             title: "Total Domains",
             value: "0",
             change: "+0%",
-            trend: "up",
+            trend: "neutral",
             icon: Globe
         },
         {
             title: "Active Certs",
             value: "0",
             change: "+0%",
-            trend: "up",
+            trend: "neutral",
             icon: ShieldCheck
         },
         {
@@ -59,56 +61,63 @@ export default function DashboardPage() {
             title: "Expiring",
             value: "0",
             change: "0%",
-            trend: "down",
+            trend: "neutral",
             icon: AlertTriangle
         },
     ]);
 
     useEffect(() => {
-        fetch('/api/domains')
-            .then(res => res.json())
-            .then(data => {
-                const total = data.length || 0;
-                // @ts-ignore
-                const active = data.filter(d => d.status === 'active').length;
-                // @ts-ignore
-                const pending = data.filter(d => d.status === 'pending').length;
-                // @ts-ignore
-                const expired = data.filter(d => d.status === 'expired').length;
+        const fetchData = async () => {
+            try {
+                const res = await fetch('/api/dashboard/stats');
+                if (res.ok) {
+                    const data = await res.json();
+                    console.log("DASHBOARD DATA:", data);
 
-                setStats([
-                    {
-                        title: "Total Domains",
-                        value: total.toString(),
-                        change: "+12%", // Mock trend
-                        trend: "up",
-                        icon: Globe
-                    },
-                    {
-                        title: "Active Certs",
-                        value: active.toString(),
-                        change: "+23%", // Mock trend
-                        trend: "up",
-                        icon: ShieldCheck
-                    },
-                    {
-                        title: "Pending",
-                        value: pending.toString(),
-                        change: "-5%", // Mock trend
-                        trend: "down",
-                        icon: Clock
-                    },
-                    {
-                        title: "Expiring",
-                        value: expired.toString(),
-                        change: "0%", // Mock trend
-                        trend: "neutral",
-                        icon: AlertTriangle
-                    },
-                ]);
-            })
-            .catch(err => console.error(err));
-    }, []);
+                    setStats([
+                        {
+                            title: "Total Domains",
+                            value: data.stats.total.value.toString(),
+                            change: data.stats.total.change,
+                            trend: data.stats.total.trend,
+                            icon: Globe
+                        },
+                        {
+                            title: "Active Certs",
+                            value: data.stats.active.value.toString(),
+                            change: data.stats.active.change,
+                            trend: data.stats.active.trend,
+                            icon: ShieldCheck
+                        },
+                        {
+                            title: "Pending",
+                            value: data.stats.pending.value.toString(),
+                            change: data.stats.pending.change,
+                            trend: data.stats.pending.trend,
+                            icon: Clock
+                        },
+                        {
+                            title: "Expiring",
+                            value: data.stats.expiring.value.toString(),
+                            change: data.stats.expiring.change,
+                            trend: data.stats.expiring.trend,
+                            icon: AlertTriangle
+                        },
+                    ]);
+
+                    setRecentActivity(data.recentActivity);
+                }
+            } catch (error) {
+                console.error("Failed to fetch dashboard data", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        if (session) {
+            fetchData();
+        }
+    }, [session]);
 
     return (
         <div className="space-y-6">
@@ -127,25 +136,31 @@ export default function DashboardPage() {
                             <stat.icon className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">{stat.value}</div>
-                            <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                {stat.trend === "up" ? (
-                                    <ArrowUpRight className="h-3 w-3 text-green-500" />
-                                ) : stat.trend === "down" ? (
-                                    <ArrowDownRight className="h-3 w-3 text-red-500" />
-                                ) : (
-                                    <Activity className="h-3 w-3 text-yellow-500" />
-                                )}
-                                <span
-                                    className={
-                                        stat.trend === "up" ? "text-green-500" :
-                                            stat.trend === "down" ? "text-red-500" : "text-yellow-500"
-                                    }
-                                >
-                                    {stat.change}
-                                </span>
-                                <span>from last month</span>
-                            </p>
+                            {isLoading ? (
+                                <div className="h-8 w-8 animate-pulse bg-muted rounded"></div>
+                            ) : (
+                                <>
+                                    <div className="text-2xl font-bold">{stat.value}</div>
+                                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                        {stat.trend === "up" ? (
+                                            <ArrowUpRight className="h-3 w-3 text-green-500" />
+                                        ) : stat.trend === "down" ? (
+                                            <ArrowDownRight className="h-3 w-3 text-red-500" />
+                                        ) : (
+                                            <Activity className="h-3 w-3 text-muted-foreground" />
+                                        )}
+                                        <span
+                                            className={
+                                                stat.trend === "up" ? "text-green-500" :
+                                                    stat.trend === "down" ? "text-red-500" : "text-muted-foreground"
+                                            }
+                                        >
+                                            {stat.change === "0%" ? "No change" : stat.change}
+                                        </span>
+                                        {stat.change !== "0%" && <span>from last month</span>}
+                                    </p>
+                                </>
+                            )}
                         </CardContent>
                     </Card>
                 ))}
@@ -158,22 +173,32 @@ export default function DashboardPage() {
                         <CardDescription>Latest actions in your account</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="space-y-4">
-                            {recentActivity.map((activity) => (
-                                <div
-                                    key={activity.id}
-                                    className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0"
-                                >
-                                    <div className="space-y-1">
-                                        <p className="text-sm font-medium">{activity.action}</p>
-                                        <p className="text-sm text-muted-foreground">
-                                            {activity.domain}
-                                        </p>
+                        {isLoading ? (
+                            <div className="flex justify-center p-4">
+                                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                            </div>
+                        ) : recentActivity.length > 0 ? (
+                            <div className="space-y-4">
+                                {recentActivity.map((activity) => (
+                                    <div
+                                        key={activity.id}
+                                        className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0"
+                                    >
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-medium">{activity.action}</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                {activity.domain}
+                                            </p>
+                                        </div>
+                                        <p className="text-sm text-muted-foreground">{activity.time}</p>
                                     </div>
-                                    <p className="text-sm text-muted-foreground">{activity.time}</p>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-4 text-muted-foreground text-sm">
+                                No recent activity
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 

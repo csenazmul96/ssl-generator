@@ -39,7 +39,8 @@ import {
     ArrowUpDown,
     Plus,
     Search,
-    Loader2
+    Loader2,
+    Copy
 } from "lucide-react";
 import {
     Dialog,
@@ -192,13 +193,19 @@ export default function Domains() {
     const [modalOpen, setModalOpen] = useState(false);
     const [error, setError] = useState('');
 
+    // Verification State
+    const [verifyOpen, setVerifyOpen] = useState(false);
+    const [verifyLoading, setVerifyLoading] = useState(false);
+    const [verifyData, setVerifyData] = useState<any>(null);
+    const [verifyError, setVerifyError] = useState('');
+    const [currentVerifyDomain, setCurrentVerifyDomain] = useState('');
+
     const fetchDomains = async () => {
         try {
             setLoading(true);
             const res = await fetch('/api/domains');
             if (res.ok) {
                 const domains = await res.json();
-                // Map keys if necessary, purely relying on consistent naming for now
                 setData(domains);
             }
         } catch (e) {
@@ -239,9 +246,75 @@ export default function Domains() {
         }
     };
 
+    const handleVerify = async (domain: string, type: 'dns-01' | 'http-01') => {
+        setVerifyLoading(true);
+        setVerifyError('');
+        setVerifyData(null);
+        setCurrentVerifyDomain(domain);
+        setVerifyOpen(true);
+
+        try {
+            // Requires existing session from client side, use session if needed or just rely on cookie
+            const res = await fetch('/api/acme/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ domain, challengeType: type }),
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setVerifyData(data);
+            } else {
+                const err = await res.json();
+                setVerifyError(err.error || 'Failed to generate token');
+            }
+        } catch (e) {
+            setVerifyError('Network error');
+        } finally {
+            setVerifyLoading(false);
+        }
+    };
+
     const table = useReactTable({
         data,
-        columns,
+        columns: [
+            ...columns.slice(0, -1), // All columns except actions, which we redefine here to access state
+            {
+                id: "actions",
+                cell: ({ row }) => {
+                    const domain = row.original;
+                    return (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" className="h-8 w-8 p-0">
+                                    <span className="sr-only">Open menu</span>
+                                    <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                <DropdownMenuItem
+                                    onClick={() => navigator.clipboard.writeText(domain.name)}
+                                >
+                                    Copy domain name
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => handleVerify(domain.name, 'dns-01')}>
+                                    Generate DNS Token
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleVerify(domain.name, 'http-01')}>
+                                    Generate HTTP Token
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-destructive">
+                                    Delete domain
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    );
+                },
+            }
+        ],
         onSortingChange: setSorting,
         onColumnFiltersChange: setColumnFilters,
         getCoreRowModel: getCoreRowModel(),
@@ -268,43 +341,117 @@ export default function Domains() {
                     </p>
                 </div>
 
-                <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-                    <DialogTrigger asChild>
-                        <Button>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add Domain
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
-                        <DialogHeader>
-                            <DialogTitle>Add New Domain</DialogTitle>
-                            <DialogDescription>
-                                Enter the domain name you want to secure. We'll verify ownership next.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label htmlFor="domain" className="text-right">
-                                    Domain
-                                </Label>
-                                <Input
-                                    id="domain"
-                                    placeholder="example.com"
-                                    className="col-span-3"
-                                    value={newDomain}
-                                    onChange={(e) => setNewDomain(e.target.value)}
-                                />
-                            </div>
-                            {error && <p className="text-sm text-destructive text-center">{error}</p>}
-                        </div>
-                        <DialogFooter>
-                            <Button type="submit" onClick={handleAdd} disabled={adding}>
-                                {adding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <div className="flex gap-2">
+                    <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+                        <DialogTrigger asChild>
+                            <Button>
+                                <Plus className="mr-2 h-4 w-4" />
                                 Add Domain
                             </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[425px]">
+                            <DialogHeader>
+                                <DialogTitle>Add New Domain</DialogTitle>
+                                <DialogDescription>
+                                    Enter the domain name you want to secure.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="grid gap-4 py-4">
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                    <Label htmlFor="domain" className="text-right">
+                                        Domain
+                                    </Label>
+                                    <Input
+                                        id="domain"
+                                        placeholder="example.com"
+                                        className="col-span-3"
+                                        value={newDomain}
+                                        onChange={(e) => setNewDomain(e.target.value)}
+                                    />
+                                </div>
+                                {error && <p className="text-sm text-destructive text-center">{error}</p>}
+                            </div>
+                            <DialogFooter>
+                                <Button type="submit" onClick={handleAdd} disabled={adding}>
+                                    {adding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    Add Domain
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+
+                    {/* Verification Dialog */}
+                    <Dialog open={verifyOpen} onOpenChange={setVerifyOpen}>
+                        <DialogContent className="sm:max-w-[500px]">
+                            <DialogHeader>
+                                <DialogTitle>Verification Token</DialogTitle>
+                                <DialogDescription>
+                                    Add this record to verify ownership of <strong>{currentVerifyDomain}</strong>
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            {verifyLoading ? (
+                                <div className="flex justify-center py-8">
+                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                </div>
+                            ) : verifyError ? (
+                                <div className="py-4 text-center text-destructive">
+                                    {verifyError}
+                                </div>
+                            ) : verifyData ? (
+                                <div className="space-y-4 py-4">
+                                    {verifyData.challengeType === 'dns-01' ? (
+                                        <>
+                                            <div className="space-y-2">
+                                                <Label>TXT Record Name</Label>
+                                                <div className="flex items-center gap-2">
+                                                    <Input readOnly value={verifyData.key} />
+                                                    <Button variant="outline" size="icon" onClick={() => navigator.clipboard.writeText(verifyData.key)}>
+                                                        <Copy className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>TXT Record Value</Label>
+                                                <div className="flex items-center gap-2">
+                                                    <Input readOnly value={verifyData.value} />
+                                                    <Button variant="outline" size="icon" onClick={() => navigator.clipboard.writeText(verifyData.value)}>
+                                                        <Copy className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="space-y-2">
+                                                <Label>File Name (URL Path)</Label>
+                                                <div className="flex items-center gap-2">
+                                                    <Input readOnly value={`/.well-known/acme-challenge/${verifyData.key}`} />
+                                                    <Button variant="outline" size="icon" onClick={() => navigator.clipboard.writeText(`/.well-known/acme-challenge/${verifyData.key}`)}>
+                                                        <Copy className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>File Content</Label>
+                                                <div className="flex items-center gap-2">
+                                                    <Input readOnly value={verifyData.value} />
+                                                    <Button variant="outline" size="icon" onClick={() => navigator.clipboard.writeText(verifyData.value)}>
+                                                        <Copy className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            ) : null}
+
+                            <DialogFooter>
+                                <Button onClick={() => setVerifyOpen(false)}>Close</Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                </div>
             </div>
 
             <div className="flex items-center gap-4">
