@@ -6,6 +6,7 @@ export interface OrderState {
     domain: string;
     orderUrl: string;
     accountKey: string;
+    accountUrl?: string;  // Store the account URL for reuse
     privateKey: string;
     challenge: {
         type: 'dns-01' | 'http-01';
@@ -41,6 +42,7 @@ export async function saveOrder(domainName: string, state: OrderState, userId?: 
         domainId: domainVal._id,
         orderUrl: state.orderUrl,
         accountKey: state.accountKey,
+        accountUrl: state.accountUrl || '',
         privateKey: state.privateKey,
         challengeType: state.challenge.type,
         challengeUrl: state.challenge.url,
@@ -66,6 +68,7 @@ export async function getOrder(domainName: string): Promise<OrderState | null> {
         domain: domain.name,
         orderUrl: order.orderUrl,
         accountKey: order.accountKey,
+        accountUrl: order.accountUrl,
         privateKey: order.privateKey,
         challenge: {
             type: order.challengeType as any,

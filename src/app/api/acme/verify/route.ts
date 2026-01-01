@@ -3,8 +3,9 @@ import acme from 'acme-client';
 import JSZip from 'jszip';
 import { getOrder, deleteOrder } from '@/lib/orderStore';
 
-const DIRECTORY_URL = acme.directory.letsencrypt.production;
-// const DIRECTORY_URL = acme.directory.letsencrypt.staging;
+// Using Staging for testing - no rate limits!
+const DIRECTORY_URL = acme.directory.letsencrypt.staging;
+// const DIRECTORY_URL = acme.directory.letsencrypt.production;
 
 export async function POST(req: NextRequest) {
     try {
@@ -16,28 +17,45 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Order not found or expired' }, { status: 404 });
         }
 
-        // Reconstruct Client
+        // Reconstruct Client with the saved account key
         const accountKey = typeof state.accountKey === 'string' ? JSON.parse(state.accountKey) : state.accountKey;
         const client = new acme.Client({
             directoryUrl: DIRECTORY_URL,
-            accountKey: Buffer.from(accountKey), // Ensure it's a buffer if needed, usually acme-client handles obj
+            accountKey: accountKey,
         });
 
-        // Re-login to fetch account URL (required for subsequent calls)
-        await client.createAccount({
-            termsOfServiceAgreed: true,
-            contact: [`mailto:admin@${domain}`],
-        });
+        // Restore the account URL from saved state (this is the KEY fix!)
+        // Setting accountUrl directly prevents the client from creating a new account
+        if (state.accountUrl) {
+            console.log('Restoring account URL:', state.accountUrl);
+            (client as any).accountUrl = state.accountUrl;
+        } else {
+            console.warn('No accountUrl found in saved state - this may cause issues');
+        }
 
-        // 1. Verify Challenge
-        const challenge = { type: state.challenge.type, url: state.challenge.url };
-        // We assume user has set the TXT record or uploaded the file.
-        // The library will make the call to the ACME server to say "I'm ready".
-        await client.completeChallenge(challenge as any);
+        console.log('--- DEBUG: Starting Verification ---');
+        console.log('Challenge Type:', state.challenge.type);
+        console.log('Challenge URL:', state.challenge.url);
+        console.log('Order URL:', state.orderUrl);
 
-        // 2. Poll for Status
-        // acme-client has 'waitForValidStatus'
-        await client.waitForValidStatus(challenge as any);
+        // 1. Complete Challenge (Tell Let's Encrypt we're ready)
+        const challenge = {
+            type: state.challenge.type,
+            url: state.challenge.url
+        };
+
+        try {
+            console.log('Completing challenge...');
+            await client.completeChallenge(challenge as any);
+
+            console.log('Waiting for challenge validation...');
+            // 2. Wait for validation (this polls the ACME server)
+            await client.waitForValidStatus(challenge as any);
+            console.log('Challenge validated successfully!');
+        } catch (challengeErr: any) {
+            console.error('Challenge verification failed:', challengeErr);
+            throw new Error(`Challenge verification failed: ${challengeErr.message || 'Unknown error'}`);
+        }
 
         // 2. Finalize Order (Generate Cert)
         // Create CSR

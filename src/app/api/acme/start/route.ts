@@ -4,9 +4,9 @@ import { saveOrder } from '@/lib/orderStore';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
 
-// Staging environment for testing
-// const DIRECTORY_URL = acme.directory.letsencrypt.staging;
-const DIRECTORY_URL = acme.directory.letsencrypt.production;
+// Using Staging for testing - no rate limits!
+const DIRECTORY_URL = acme.directory.letsencrypt.staging;
+// const DIRECTORY_URL = acme.directory.letsencrypt.production;
 
 export async function POST(req: NextRequest) {
     try {
@@ -32,11 +32,16 @@ export async function POST(req: NextRequest) {
             accountKey: privateKey,
         });
 
-        // Create Account
+        // Create Account and capture the account URL
         await client.createAccount({
             termsOfServiceAgreed: true,
             contact: [`mailto:${contactEmail}`],
         });
+
+        // The ACME client stores the account URL internally after createAccount
+        // Access it via the internal client property
+        const accountUrl = (client as any).accountUrl || (client as any)._accountUrl || '';
+        console.log('Captured Account URL:', accountUrl);
 
         // 2. Create Order
         const order = await client.createOrder({
@@ -77,10 +82,13 @@ export async function POST(req: NextRequest) {
             value = keyAuthorization;
         }
 
+        // accountUrl is already captured from createAccount response above
+
         await saveOrder(domain, {
             domain,
             orderUrl: order.url,
             accountKey: JSON.stringify(privateKey),
+            accountUrl, // Save the account URL
             privateKey: domainPrivateKey.toString(),
             challenge: {
                 type: challengeType as any,

@@ -1,13 +1,16 @@
 'use client';
 
-import { Navbar, NavbarBrand, NavbarContent, NavbarItem, Button, Card, CardBody, Link as UILink } from "@nextui-org/react";
+import { Navbar, NavbarBrand, NavbarContent, NavbarItem, Button, Card, CardBody, Link as UILink, Dropdown, DropdownTrigger, DropdownMenu, DropdownItem, Avatar } from "@nextui-org/react";
 import Link from "next/link";
 import { FaLock, FaGlobe, FaShieldAlt, FaBolt, FaCheck } from "react-icons/fa";
+import { useSession, signOut } from "next-auth/react";
 
 export default function LandingPage() {
+  const { data: session, status } = useSession();
+
   return (
     <div className="min-h-screen flex flex-col">
-      {/* Custom Navbar for Landing (or reuse Header if adapted) */}
+      {/* Session-Aware Navbar */}
       <Navbar className="bg-background/60 backdrop-blur-md border-b border-divider" maxWidth="xl">
         <NavbarBrand>
           <Link href="/" className="font-bold text-inherit text-xl flex items-center gap-2">
@@ -16,14 +19,56 @@ export default function LandingPage() {
           </Link>
         </NavbarBrand>
         <NavbarContent justify="end">
-          <NavbarItem className="hidden lg:flex">
-            <Link href="/login" className="text-sm hover:text-primary transition-colors">Login</Link>
-          </NavbarItem>
-          <NavbarItem>
-            <Button as={Link} color="primary" href="/register" variant="shadow">
-              Get Started
-            </Button>
-          </NavbarItem>
+          {status === 'authenticated' ? (
+            <>
+              <NavbarItem>
+                <Button as={Link} href="/dashboard" variant="flat" color="primary">
+                  Dashboard
+                </Button>
+              </NavbarItem>
+              <NavbarItem>
+                <Dropdown placement="bottom-end">
+                  <DropdownTrigger>
+                    <Avatar
+                      isBordered
+                      as="button"
+                      className="transition-transform"
+                      color="secondary"
+                      name={session?.user?.name || 'User'}
+                      size="sm"
+                      src={session?.user?.image || undefined}
+                    />
+                  </DropdownTrigger>
+                  <DropdownMenu aria-label="Profile Actions" variant="flat">
+                    <DropdownItem key="profile" className="h-14 gap-2">
+                      <p className="font-semibold">Signed in as</p>
+                      <p className="font-semibold">{session?.user?.email}</p>
+                    </DropdownItem>
+                    <DropdownItem key="dashboard" as={Link} href="/dashboard">
+                      Dashboard
+                    </DropdownItem>
+                    <DropdownItem key="profile-settings" as={Link} href="/dashboard/profile">
+                      Profile Settings
+                    </DropdownItem>
+                    <DropdownItem key="logout" color="danger" onClick={() => signOut()}>
+                      Log Out
+                    </DropdownItem>
+                  </DropdownMenu>
+                </Dropdown>
+              </NavbarItem>
+            </>
+          ) : (
+            <>
+              <NavbarItem className="hidden lg:flex">
+                <Link href="/login" className="text-sm hover:text-primary transition-colors">Login</Link>
+              </NavbarItem>
+              <NavbarItem>
+                <Button as={Link} color="primary" href="/register" variant="shadow">
+                  Get Started
+                </Button>
+              </NavbarItem>
+            </>
+          )}
         </NavbarContent>
       </Navbar>
 

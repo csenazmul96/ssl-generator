@@ -5,6 +5,7 @@ const AcmeOrderSchema = new Schema({
 
     orderUrl: String,
     accountKey: String, // Stored as Text/JSON
+    accountUrl: String, // ACME account URL for reuse
     privateKey: String, // Stored as Text/JSON
 
     // Challenge details

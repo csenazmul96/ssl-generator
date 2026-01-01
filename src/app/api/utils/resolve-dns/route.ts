@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import dns from 'dns';
 import util from 'util';
 
-const resolveTxt = util.promisify(dns.resolveTxt);
-
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
@@ -25,14 +23,20 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        // Default to DNS-01
+        // Default to DNS-01 - Use Google DNS to avoid local cache issues
         const hostname = `_acme-challenge.${domain}`;
-        console.log(`Resolving TXT for ${hostname}`);
+        console.log(`Resolving TXT for ${hostname} using Cloudflare DNS (1.1.1.1)`);
 
         try {
-            // Standard DNS check
+            // Create resolver with Cloudflare DNS (faster cache refresh than Google)
+            const resolver = new dns.Resolver();
+            resolver.setServers(['1.1.1.1', '1.0.0.1', '8.8.8.8']);
+
+            const resolveTxt = util.promisify(resolver.resolveTxt.bind(resolver));
             const records = await resolveTxt(hostname);
-            const flatRecords = records.map(chunk => chunk.join(''));
+            const flatRecords = records.map((chunk: string[]) => chunk.join(''));
+
+            console.log(`✓ DNS resolved via Cloudflare DNS: ${flatRecords.join(', ')}`);
 
             return NextResponse.json({
                 found: true,
@@ -40,9 +44,6 @@ export async function POST(req: NextRequest) {
             });
         } catch (bsError: any) {
             console.warn('DNS lookup failed:', bsError.code);
-            // If default DNS fails, sometimes it's local caching. 
-            // In a real Node environment we can't easily force 8.8.8.8 without a library/custom implementation
-            // so we return not found.
             return NextResponse.json({ found: false, records: [] });
         }
 

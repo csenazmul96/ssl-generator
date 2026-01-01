@@ -26,28 +26,23 @@ export default function DomainList({ domains }: DomainListProps) {
     const [challenge, setChallenge] = useState<{ domain: string; type: 'dns-01' | 'http-01'; key: string; value: string } | null>(null);
     const [dnsCheckResult, setDnsCheckResult] = useState<{ found: boolean; records: string[]; content?: string; status?: number } | null>(null);
     const { isOpen, onOpen, onOpenChange } = useDisclosure();
+    const [pendingVerifications, setPendingVerifications] = useState<Record<string, boolean>>({});
 
-    // Restore state on load
+    // Restore state on load and check for pending verifications
     useEffect(() => {
         fetch('/api/acme/status')
             .then(res => res.json())
             .then(data => {
+                const pending: Record<string, boolean> = {};
                 for (const d of domains) {
                     if (data[d.name]) {
-                        const saved = data[d.name];
-                        setChallenge({
-                            domain: saved.domain,
-                            type: saved.challenge.type || 'dns-01',
-                            key: saved.challenge.key || saved.challenge.dnsRecord,
-                            value: saved.challenge.value || saved.challenge.dnsValue
-                        });
-                        onOpen();
-                        break;
+                        pending[d.name] = true;
                     }
                 }
+                setPendingVerifications(pending);
             })
             .catch(err => console.error('Failed to load saved state', err));
-    }, [domains, onOpen]);
+    }, [domains]);
 
     const handleStart = async (domain: string, type: 'dns-01' | 'http-01') => {
         setLoading(domain);
@@ -70,6 +65,7 @@ export default function DomainList({ domains }: DomainListProps) {
                 key: data.key,
                 value: data.value
             });
+            setPendingVerifications(prev => ({ ...prev, [domain]: true }));
             onOpen(); // Open the modal
         } catch (error: any) {
             alert(error.message);
@@ -129,6 +125,8 @@ export default function DomainList({ domains }: DomainListProps) {
                 setChallenge(null); // Success!
                 onOpenChange(); // Close modal
                 alert('Success! Certificate downloaded.');
+                // Refresh the page to update status
+                window.location.reload();
             } else {
                 const data = await res.json();
                 alert(`Error: ${data.error}`);
@@ -140,11 +138,31 @@ export default function DomainList({ domains }: DomainListProps) {
         }
     };
 
-    const handleCancel = () => {
-        setChallenge(null);
+    const handleCancel = async () => {
+        // Close modal but keep challenge in state
+        // This allows resuming later
+        onOpenChange();
         setDnsCheckResult(null);
-        onOpenChange(); // Close
-        // Optionally call API to delete order from store
+    };
+
+    const resumeVerification = (domain: string) => {
+        // Fetch the existing challenge and reopen modal
+        fetch('/api/acme/status')
+            .then(res => res.json())
+            .then(data => {
+                if (data[domain]) {
+                    const saved = data[domain];
+                    setChallenge({
+                        domain: saved.domain,
+                        type: saved.challenge.type || 'dns-01',
+                        key: saved.challenge.key || saved.challenge.dnsRecord,
+                        value: saved.challenge.value || saved.challenge.dnsValue
+                    });
+                    setDnsCheckResult(null);
+                    onOpen();
+                }
+            })
+            .catch(err => console.error('Failed to resume', err));
     };
 
     const statusMap = {
@@ -172,28 +190,43 @@ export default function DomainList({ domains }: DomainListProps) {
                             </TableCell>
                             <TableCell>
                                 <div className="flex justify-end gap-2">
-                                    <Tooltip content="DNS Verification (Requires propagation)">
-                                        <Button
-                                            size="sm"
-                                            color="primary"
-                                            variant="flat"
-                                            isLoading={loading === d.name}
-                                            onPress={() => handleStart(d.name, 'dns-01')}
-                                        >
-                                            DNS Verify
-                                        </Button>
-                                    </Tooltip>
-                                    <Tooltip content="HTTP Verification (Instant)">
-                                        <Button
-                                            size="sm"
-                                            color="secondary"
-                                            variant="flat"
-                                            isLoading={loading === d.name}
-                                            onPress={() => handleStart(d.name, 'http-01')}
-                                        >
-                                            HTTP Verify
-                                        </Button>
-                                    </Tooltip>
+                                    {pendingVerifications[d.name] ? (
+                                        <Tooltip content="Resume pending DNS verification">
+                                            <Button
+                                                size="sm"
+                                                color="warning"
+                                                variant="flat"
+                                                onPress={() => resumeVerification(d.name)}
+                                            >
+                                                📋 Resume Verification
+                                            </Button>
+                                        </Tooltip>
+                                    ) : (
+                                        <>
+                                            <Tooltip content="DNS Verification (Requires propagation)">
+                                                <Button
+                                                    size="sm"
+                                                    color="primary"
+                                                    variant="flat"
+                                                    isLoading={loading === d.name}
+                                                    onPress={() => handleStart(d.name, 'dns-01')}
+                                                >
+                                                    DNS Verify
+                                                </Button>
+                                            </Tooltip>
+                                            <Tooltip content="HTTP Verification (Instant)">
+                                                <Button
+                                                    size="sm"
+                                                    color="secondary"
+                                                    variant="flat"
+                                                    isLoading={loading === d.name}
+                                                    onPress={() => handleStart(d.name, 'http-01')}
+                                                >
+                                                    HTTP Verify
+                                                </Button>
+                                            </Tooltip>
+                                        </>
+                                    )}
                                 </div>
                             </TableCell>
                         </TableRow>
@@ -275,9 +308,11 @@ export default function DomainList({ domains }: DomainListProps) {
                                 )}
                             </ModalBody>
                             <ModalFooter>
-                                <Button color="danger" variant="light" onPress={handleCancel}>
-                                    Cancel
-                                </Button>
+                                <Tooltip content="Close this modal and work on other domains. You can resume later.">
+                                    <Button color="default" variant="light" onPress={handleCancel}>
+                                        Close & Continue Later
+                                    </Button>
+                                </Tooltip>
                                 <Button
                                     color="warning"
                                     variant="flat"
